@@ -67,22 +67,119 @@ function errorResponse(message: string, status: number): Response {
 }
 
 // ---------------------------------------------------------------------------
+// Proper noun preservation
+//
+// Extracts tokens that should survive translation unchanged (POKéMON, DNA,
+// all-caps acronyms, Pokémon proper names like "MEW", "PIKACHU", etc.),
+// replaces them with numeric placeholders, then restores them afterward.
+// This prevents word-boundary rules from partially mangling them.
+// ---------------------------------------------------------------------------
+
+const PROPER_NOUN_PATTERNS = [
+  /POK[Éé]MON/gi,        // POKéMON / POKEMON
+  /\bDNA\b/g,
+  /\bRNA\b/g,
+  /\b[A-Z]{2,}\b/g,      // all-caps acronyms / Pokémon names in caps (MEW, HP, etc.)
+];
+
+function preserveProperNouns(text: string): { processed: string; tokens: string[] } {
+  const tokens: string[] = [];
+  let processed = text;
+
+  for (const pattern of PROPER_NOUN_PATTERNS) {
+    processed = processed.replace(pattern, (match) => {
+      // Avoid duplicating already-stored tokens
+      let idx = tokens.indexOf(match);
+      if (idx === -1) {
+        idx = tokens.length;
+        tokens.push(match);
+      }
+      return `__PN${idx}__`;
+    });
+  }
+
+  return { processed, tokens };
+}
+
+function restoreProperNouns(text: string, tokens: string[]): string {
+  return text.replace(/__PN(\d+)__/g, (_, i) => tokens[parseInt(i, 10)] ?? "");
+}
+
+// ---------------------------------------------------------------------------
 // Yoda translator
 //
 // Strategy:
-//   1. Split text into sentences.
-//   2. For each sentence, apply word-level replacements.
-//   3. Rearrange clause structure: move the predicate/object before the subject+verb.
-//   4. Append a Yoda filler phrase occasionally.
+//   1. Preserve proper nouns.
+//   2. Apply word-level replacements.
+//   3. Rearrange clause structure per sentence:
+//      a. "Capable of X, subject is" pattern
+//      b. Passive voice: "Subject was verbed by agent" → "By agent, verbed subject was"
+//      c. "When X, Y" → "Y, when X"
+//      d. General clause flip on conjunctions/commas
+//      e. Subject-verb-object inversion for simple sentences
+//   4. Append a Yoda filler phrase.
+//   5. Restore proper nouns.
 // ---------------------------------------------------------------------------
 
 const YODA_WORD_MAP: Array<[RegExp, string]> = [
+  // Pokemon / scientific vocabulary
+  [/\bcapable of\b/gi, "able to"],
+  [/\binstantly\b/gi, "at once"],
+  [/\btransform(?:s|ed|ing)?\b/gi, "change"],
+  [/\bduplicate\b/gi, "copy"],
+  [/\bscientist\b/gi, "one of great knowledge"],
+  [/\bexperiments?\b/gi, "trials"],
+  [/\bgenetic code\b/gi, "life essence"],
+  [/\bgenetic\b/gi, "life"],
+  [/\belectricity\b/gi, "spark energy"],
+  [/\bgather(?:s|ed|ing)?\b/gi, "come together"],
+  [/\bhorrific\b/gi, "terrible"],
+  [/\bcreatures?\b/gi, "beings"],
+  [/\bcopying\b/gi, "mimicking"],
+  [/\bcopies\b/gi, "mimics"],
+  [/\bcopy\b/gi, "mimic"],
+  [/\blightning storms?\b/gi, "sky fire tempests"],
+  [/\blightning\b/gi, "sky fire"],
+  [/\bstorms?\b/gi, "great disturbances"],
+  [/\battack(?:s|ed|ing)?\b/gi, "strike"],
+  [/\bdefend(?:s|ed|ing)?\b/gi, "protect"],
+  [/\bdestroy(?:s|ed|ing)?\b/gi, "obliterate"],
+  [/\bseveral\b/gi, "many"],
+  [/\bcause(?:s|d)?\b/gi, "bring about"],
+  [/\baccumulat(?:es?|ed|ing)\b/gi, "grow"],
+  [/\bevolve(?:s|d|ing)?\b/gi, "change form"],
+  [/\bwild\b/gi, "untamed"],
+  [/\babilit(?:y|ies)\b/gi, "gift"],
+  [/\bpower(?:s|ful)?\b/gi, "strength"],
+  [/\brake\b/gi, "seldom found"],
+  [/\bancient\b/gi, "of old times"],
+  [/\bcreated?\b/gi, "made"],
+  [/\bsplicing\b/gi, "fusing"],
+  [/\bsplice(?:s|d)?\b/gi, "fuse"],
+  [/\bengineering\b/gi, "crafting"],
+  [/\bexperiment(?:s|ed|ing)?\b/gi, "trial"],
+  [/\benerg(?:y|ies)\b/gi, "force"],
+  [/\bspecies\b/gi, "kind"],
+  [/\bevolut(?:ion|ionary)\b/gi, "change of form"],
+  [/\bflame(?:s|thrower)?\b/gi, "fire breath"],
+  [/\bwings?\b/gi, "great limbs"],
+  [/\bclaws?\b/gi, "talons"],
+  [/\bfang(?:s)?\b/gi, "sharp teeth"],
+  [/\btail(?:s)?\b/gi, "appendage"],
+  [/\bshell\b/gi, "hard casing"],
+  [/\bpretend(?:s|ed|ing)?\b/gi, "feign"],
+  [/\brelease(?:s|d|ing)?\b/gi, "unleash"],
+  [/\babsorb(?:s|ed|ing)?\b/gi, "draw in"],
+  [/\bemit(?:s|ted|ting)?\b/gi, "release"],
+  [/\bgenerat(?:es?|ed|ing)\b/gi, "produce"],
+  // General vocabulary (original + expanded)
   [/\bvery\b/gi, "most"],
   [/\breally\b/gi, "truly"],
   [/\bgreat\b/gi, "powerful"],
   [/\bgood\b/gi, "worthy"],
   [/\bbad\b/gi, "unworthy"],
   [/\bfriend\b/gi, "ally"],
+  [/\benemy's\b/gi, "foe's"],
   [/\benemy\b/gi, "foe"],
   [/\bwill\b/gi, "shall"],
   [/\bneed\b/gi, "must"],
@@ -112,14 +209,71 @@ const YODA_FILLERS = [
   ". Much to learn, you still have.",
   ", young one.",
   ". Strong with the Force, you are.",
+  ". Powerful, the ways of nature are.",
+  ", sense this I do.",
+  ". Curious, this is.",
 ];
 
 function rearrangeToYoda(sentence: string): string {
-  const trailingPunct = sentence.match(/[.!?,;]+$/)?.[0] ?? "";
-  const core = sentence.replace(/[.!?,;]+$/, "").trim();
+  const trailingPunct = sentence.match(/[.!?]+$/)?.[0] ?? "";
+  const core = sentence.replace(/[.!?]+$/, "").trim();
 
   if (!core) return sentence;
 
+  // Pattern: "Subject is/are capable of/able to <gerund phrase>"
+  // → "Of/To <gerund phrase>, capable/able <subject> is"
+  const capablePattern = /^(.+?)\s+(?:is|are)\s+(capable of|able to)\s+(.+)$/i;
+  const capableMatch = core.match(capablePattern);
+  if (capableMatch) {
+    const [, subject, qualifier, gerund] = capableMatch;
+    const verb = /\bare\b/i.test(capableMatch[0]) ? "are" : "is";
+    return (
+      qualifier.charAt(0).toUpperCase() +
+      qualifier.slice(1) +
+      " " +
+      gerund +
+      ", " +
+      subject.toLowerCase() +
+      " " +
+      verb +
+      trailingPunct
+    );
+  }
+
+  // Pattern: passive voice "Subject was/were verbed by agent"
+  // → "By agent, verbed subject was"
+  const passivePattern = /^(.+?)\s+(was|were)\s+(.+?)\s+by\s+(.+)$/i;
+  const passiveMatch = core.match(passivePattern);
+  if (passiveMatch) {
+    const [, subject, auxVerb, pastParticiple, agent] = passiveMatch;
+    return (
+      "By " +
+      agent +
+      ", " +
+      pastParticiple +
+      " " +
+      subject.toLowerCase() +
+      " " +
+      auxVerb.toLowerCase() +
+      trailingPunct
+    );
+  }
+
+  // Pattern: "When X, Y" → "Y, when X"
+  const whenPattern = /^when\s+(.+?),\s+(.+)$/i;
+  const whenMatch = core.match(whenPattern);
+  if (whenMatch) {
+    const [, condition, consequence] = whenMatch;
+    return (
+      consequence.charAt(0).toUpperCase() +
+      consequence.slice(1) +
+      ", when " +
+      condition.toLowerCase() +
+      trailingPunct
+    );
+  }
+
+  // General clause splits
   const splitPatterns = [
     /^(.+?),\s+(.+)$/,
     /^(.+?)\s+because\s+(.+)$/i,
@@ -127,6 +281,7 @@ function rearrangeToYoda(sentence: string): string {
     /^(.+?)\s+and\s+(.+)$/i,
     /^(.+?)\s+so\s+(.+)$/i,
     /^(.+?)\s+that\s+(.+)$/i,
+    /^(.+?)\s+after\s+(.+)$/i,
   ];
 
   for (const pattern of splitPatterns) {
@@ -139,6 +294,7 @@ function rearrangeToYoda(sentence: string): string {
     }
   }
 
+  // Simple subject-verb-object inversion
   const subjectVerbPattern = /^(I|You|He|She|We|They|It)\s+(\w+)\s+(.+)$/i;
   const sv = core.match(subjectVerbPattern);
   if (sv) {
@@ -158,9 +314,21 @@ function rearrangeToYoda(sentence: string): string {
 }
 
 function translateToYoda(text: string): string {
-  let result = text;
+  const { processed, tokens } = preserveProperNouns(text);
+
+  let result = processed;
   for (const [pattern, replacement] of YODA_WORD_MAP) {
-    result = result.replace(pattern, replacement);
+    if (typeof replacement === "string") {
+      result = result.replace(pattern, (match) => {
+        const rep = replacement as string;
+        if (match[0] === match[0].toUpperCase() && match[0] !== match[0].toLowerCase()) {
+          return rep.charAt(0).toUpperCase() + rep.slice(1);
+        }
+        return rep;
+      });
+    } else {
+      result = result.replace(pattern, replacement as (m: string) => string);
+    }
   }
 
   const sentences = result.match(/[^.!?]+[.!?]*/g) ?? [result];
@@ -171,21 +339,29 @@ function translateToYoda(text: string): string {
   const last = rearranged[rearranged.length - 1];
   rearranged[rearranged.length - 1] = last.replace(/[.!?]*$/, "") + filler;
 
-  return rearranged.join(" ").trim();
+  const joined = rearranged.join(" ").trim();
+  return restoreProperNouns(joined, tokens);
 }
 
 // ---------------------------------------------------------------------------
 // Shakespeare translator
 //
 // Strategy:
-//   1. Apply pronoun replacements (you → thou/thee, your → thy, etc.)
-//   2. Apply verb conjugation replacements (are → art, have → hast, etc.)
-//   3. Apply vocabulary replacements.
-//   4. Prepend or append an Elizabethan flourish.
+//   1. Preserve proper nouns.
+//   2. Apply phrase-level replacements first (multi-word).
+//   3. Apply word-level pronoun, verb, and vocabulary replacements.
+//   4. Prepend an Elizabethan flourish.
+//   5. Restore proper nouns.
 // ---------------------------------------------------------------------------
 
 const SHAKESPEARE_MAP: Array<[RegExp, string]> = [
-  // Contractions first (must come before individual word replacements)
+  // Multi-word phrase replacements (must come before single-word rules)
+  [/\bafter years of\b/gi, "after many a year of"],
+  [/\bgenetic code\b/gi, "very essence"],
+  [/\bgene splicing\b/gi, "alchemical fusion"],
+  [/\bDNA engineering\b/gi, "transmutation of the life essence"],
+  [/\blightning storms?\b/gi, "great tempests of thunder"],
+  [/\bthank you\b/gi, "gramercy"],
   [/\byou're\b/gi, "thou art"],
   [/\byou've\b/gi, "thou hast"],
   [/\byou'll\b/gi, "thou shalt"],
@@ -221,8 +397,9 @@ const SHAKESPEARE_MAP: Array<[RegExp, string]> = [
   [/\byours\b/gi, "thine"],
   [/\byourself\b/gi, "thyself"],
   // Verb forms
-  [/\bare\b/gi, "art"],
   [/\bwere\b/gi, "wert"],
+  [/\bwas\b/gi, "wast"],
+  [/\bare\b/gi, "art"],
   [/\bhave\b/gi, "hast"],
   [/\bhas\b/gi, "hath"],
   [/\bhad\b/gi, "hadst"],
@@ -245,7 +422,59 @@ const SHAKESPEARE_MAP: Array<[RegExp, string]> = [
   [/\blike\b/gi, "dost fancy"],
   [/\blove\b/gi, "dost love"],
   [/\bhate\b/gi, "dost despise"],
-  // Vocabulary
+  // Pokemon / scientific vocabulary
+  [/\bcapable\b/gi, "able"],
+  [/\binstantly\b/gi, "in a trice"],
+  [/\btransform(?:s|ed|ing)?\b/gi, "transfigure"],
+  [/\bduplicate\b/gi, "likeness"],
+  [/\bscientists?\b/gi, "alchemist"],
+  [/\bexperiments?\b/gi, "trials"],
+  [/\bgenetic\b/gi, "essential"],
+  [/\belectricity\b/gi, "galvanic force"],
+  [/\bgather(?:s|ed|ing)?\b/gi, "assemble"],
+  [/\bhorrific\b/gi, "most dreadful"],
+  [/\bcreatures?\b/gi, "beast"],
+  [/\bcopying\b/gi, "mimicking"],
+  [/\bcopies\b/gi, "mimics"],
+  [/\bcopy\b/gi, "mimic"],
+  [/\blightning\b/gi, "thunderbolt"],
+  [/\bstorms?\b/gi, "tempest"],
+  [/\battack(?:s|ed|ing)?\b/gi, "assail"],
+  [/\bdefend(?:s|ed|ing)?\b/gi, "shield"],
+  [/\bdestroy(?:s|ed|ing)?\b/gi, "lay waste to"],
+  [/\bseveral\b/gi, "sundry"],
+  [/\bcaus(?:e|es|ed|ing)\b/gi, "bring forth"],
+  [/\bbuild(?:s|t|ing)?\b/gi, "amass"],
+  [/\bevolve(?:s|d|ing)?\b/gi, "transmute"],
+  [/\bwild\b/gi, "untamed"],
+  [/\babilit(?:y|ies)\b/gi, "gift"],
+  [/\bpowers?\b/gi, "might"],
+  [/\bpowerful\b/gi, "mighty"],
+  [/\brake\b/gi, "uncommon"],
+  [/\bcreated?\b/gi, "fashioned"],
+  [/\bsplicing\b/gi, "fusing"],
+  [/\bsplice(?:s|d)?\b/gi, "fuse"],
+  [/\bengineering\b/gi, "alchemy"],
+  [/\benerg(?:y|ies)\b/gi, "vital force"],
+  [/\bspecies\b/gi, "manner of creature"],
+  [/\bevolut(?:ion|ionary)\b/gi, "transmutation"],
+  [/\bflames?\b/gi, "fire"],
+  [/\bwings?\b/gi, "great pinions"],
+  [/\bclaws?\b/gi, "talons"],
+  [/\bfangs?\b/gi, "sharp teeth"],
+  [/\btails?\b/gi, "appendage"],
+  [/\bshell\b/gi, "hard carapace"],
+  [/\brelease(?:s|d|ing)?\b/gi, "unleash"],
+  [/\babsorb(?:s|ed|ing)?\b/gi, "draw unto"],
+  [/\bemit(?:s|ted|ting)?\b/gi, "give forth"],
+  [/\bgenerat(?:es?|ed|ing)\b/gi, "conjure"],
+  [/\bsplendid\b/gi, "most wondrous"],
+  [/\bbody\b/gi, "form"],
+  [/\bminds?\b/gi, "wit"],
+  [/\bbrains?\b/gi, "wit"],
+  [/\bfight(?:s|ing)?\b/gi, "duel"],
+  [/\bfought\b/gi, "didst duel"],
+  // General vocabulary
   [/\byes\b/gi, "aye"],
   [/\bno\b/gi, "nay"],
   [/\bvery\b/gi, "most"],
@@ -253,7 +482,6 @@ const SHAKESPEARE_MAP: Array<[RegExp, string]> = [
   [/\bactually\b/gi, "forsooth"],
   [/\bplease\b/gi, "prithee"],
   [/\bthanks\b/gi, "gramercy"],
-  [/\bthank you\b/gi, "gramercy"],
   [/\bhello\b/gi, "hark"],
   [/\bhi\b/gi, "hark"],
   [/\bbye\b/gi, "fare thee well"],
@@ -314,10 +542,17 @@ const SHAKESPEARE_FLOURISHES = [
   "Forsooth, ",
   "Marry, ",
   "Good morrow! ",
+  "Lo! ",
+  "Verily, ",
+  "Mark well! ",
+  "Hear me! ",
+  "Zounds! ",
 ];
 
 function translateToShakespeare(text: string): string {
-  let result = text;
+  const { processed, tokens } = preserveProperNouns(text);
+
+  let result = processed;
   for (const [pattern, replacement] of SHAKESPEARE_MAP) {
     result = result.replace(pattern, (match) => {
       if (match[0] === match[0].toUpperCase() && match[0] !== match[0].toLowerCase()) {
@@ -328,13 +563,14 @@ function translateToShakespeare(text: string): string {
   }
 
   const flourish = SHAKESPEARE_FLOURISHES[text.length % SHAKESPEARE_FLOURISHES.length];
-  const flourishWordPattern = /^(Hark|Prithee|Forsooth|Marry|Good morrow)/i;
+  const flourishWordPattern = /^(Hark|Prithee|Forsooth|Marry|Good morrow|Lo|Verily|Mark well|Hear me|Zounds)/i;
   if (!flourishWordPattern.test(result.trim())) {
     result = flourish + result.charAt(0).toLowerCase() + result.slice(1);
     result = result.charAt(0).toUpperCase() + result.slice(1);
   }
 
-  return result.trim();
+  const joined = result.trim();
+  return restoreProperNouns(joined, tokens);
 }
 
 // ---------------------------------------------------------------------------
