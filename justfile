@@ -28,7 +28,7 @@ deploy-worker:
 
 # Deploy the Pages site (Swagger UI) to Cloudflare
 deploy-pages:
-    npx wrangler pages deploy --config wrangler.pages.toml
+    cd public && npx wrangler pages deploy
 
 # Deploy both Worker and Pages
 deploy: deploy-worker deploy-pages
