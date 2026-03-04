@@ -1,5 +1,2 @@
 name = "funtranslations"
-pages_build_output_dir = "public"
-
-[[deployment_configs.production.custom_domains]]
-domain = "funtranslations.mercxry.me"
+pages_build_output_dir = "."

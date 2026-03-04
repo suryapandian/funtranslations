@@ -17,7 +17,7 @@ info:
     > set on responses. Limit status is communicated exclusively via the `429` response body.
 
 servers:
-  - url: https://funtranslations.mercxry.me/api/v1
+  - url: https://api.funtranslations.mercxry.me/v1
     description: Production
 
 paths:

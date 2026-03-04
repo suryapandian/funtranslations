@@ -3,7 +3,7 @@ main = "src/index.ts"
 compatibility_date = "2025-03-04"
 
 routes = [
-  { pattern = "funtranslations.mercxry.me/api/v1/*", zone_name = "mercxry.me" }
+  { pattern = "api.funtranslations.mercxry.me/v1/*", zone_name = "mercxry.me" }
 ]
 
 [[durable_objects.bindings]]
