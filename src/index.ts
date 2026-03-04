@@ -581,8 +581,9 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
+    const apiPath = path.startsWith("/v1/") ? path.slice(3) : path;
 
-    if (!path.startsWith("/translate/")) {
+    if (!apiPath.startsWith("/translate/")) {
       return errorResponse("Not found", 404);
     }
 
@@ -590,7 +591,7 @@ export default {
       return errorResponse("Method not allowed. Use POST.", 405);
     }
 
-    const translationType = path.replace("/translate/", "").toLowerCase();
+    const translationType = apiPath.replace("/translate/", "").toLowerCase();
     if (translationType !== "yoda" && translationType !== "shakespeare") {
       return errorResponse(
         `Unknown translation type "${translationType}". Use /translate/yoda or /translate/shakespeare.`,
