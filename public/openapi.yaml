@@ -1,0 +1,273 @@
+openapi: 3.1.0
+
+info:
+  title: FunTranslations API
+  version: 1.0.0
+  description: |
+    A fun translation API that converts English text into Yoda-speak or Shakespearean English.
+
+    ## Rate Limiting
+
+    Each client is limited to **15 requests per hour**.
+
+    When the limit is exceeded, the API returns HTTP `429` with a JSON body containing a
+    `retry_after` field indicating how many seconds remain until the window resets.
+
+    > **Note:** No rate-limit headers (e.g. `X-RateLimit-Remaining`, `Retry-After`) are
+    > set on responses. Limit status is communicated exclusively via the `429` response body.
+
+servers:
+  - url: https://funtranslations.mercxry.me/api/v1
+    description: Production
+
+paths:
+  /translate/yoda:
+    post:
+      operationId: translateYoda
+      summary: Translate text to Yoda-speak
+      description: |
+        Translates English text into Yoda-speak by applying vocabulary substitutions
+        and sentence structure inversions (object-subject-verb ordering).
+
+        Proper nouns and acronyms are preserved. The translated output always ends
+        with a deterministic Yoda filler phrase (e.g. `, hmm.`, `. The Force is with you.`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslationRequest'
+            example:
+              text: "I am very afraid of the dark."
+      responses:
+        '200':
+          description: Successful translation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslationResponse'
+              example:
+                success:
+                  total: 1
+                contents:
+                  translated: "Most afraid of the dark, I am, hmm."
+                  text: "I am very afraid of the dark."
+                  translation: yoda
+        '400':
+          description: Bad request — invalid JSON or missing/empty `text` field
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidJson:
+                  summary: Unparseable JSON body
+                  value:
+                    error:
+                      code: 400
+                      message: "Invalid JSON body."
+                missingText:
+                  summary: Missing or empty text field
+                  value:
+                    error:
+                      code: 400
+                      message: "Missing or empty \"text\" field in request body."
+        '405':
+          description: Method not allowed — only POST is accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 405
+                  message: "Method not allowed. Use POST."
+        '429':
+          description: |
+            Rate limit exceeded — the client has made more than 15 requests within
+            the current 1-hour window. Retry after the number of seconds indicated
+            by `retry_after`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitErrorResponse'
+              example:
+                error:
+                  code: 429
+                  message: "Too many requests. You have exceeded the rate limit of 15 calls per hour."
+                retry_after: 3542
+
+  /translate/shakespeare:
+    post:
+      operationId: translateShakespeare
+      summary: Translate text to Shakespearean English
+      description: |
+        Translates English text into Elizabethan / Shakespearean English by applying
+        ~140 vocabulary and phrase substitutions (pronouns, verb conjugations, contractions,
+        and archaic vocabulary).
+
+        Proper nouns and acronyms are preserved. The translated output is prefixed with
+        a deterministic Elizabethan flourish (e.g. `Hark! `, `Forsooth, `, `Verily, `).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TranslationRequest'
+            example:
+              text: "You have a great friend."
+      responses:
+        '200':
+          description: Successful translation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranslationResponse'
+              example:
+                success:
+                  total: 1
+                contents:
+                  translated: "Prithee, thou hast a great good fellow."
+                  text: "You have a great friend."
+                  translation: shakespeare
+        '400':
+          description: Bad request — invalid JSON or missing/empty `text` field
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                invalidJson:
+                  summary: Unparseable JSON body
+                  value:
+                    error:
+                      code: 400
+                      message: "Invalid JSON body."
+                missingText:
+                  summary: Missing or empty text field
+                  value:
+                    error:
+                      code: 400
+                      message: "Missing or empty \"text\" field in request body."
+        '405':
+          description: Method not allowed — only POST is accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error:
+                  code: 405
+                  message: "Method not allowed. Use POST."
+        '429':
+          description: |
+            Rate limit exceeded — the client has made more than 15 requests within
+            the current 1-hour window. Retry after the number of seconds indicated
+            by `retry_after`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RateLimitErrorResponse'
+              example:
+                error:
+                  code: 429
+                  message: "Too many requests. You have exceeded the rate limit of 15 calls per hour."
+                retry_after: 3542
+
+components:
+  schemas:
+    TranslationRequest:
+      type: object
+      required:
+        - text
+      properties:
+        text:
+          type: string
+          minLength: 1
+          description: The English text to translate. Whitespace-only strings are rejected.
+          example: "I am very afraid of the dark."
+
+    TranslationResponse:
+      type: object
+      required:
+        - success
+        - contents
+      properties:
+        success:
+          type: object
+          required:
+            - total
+          properties:
+            total:
+              type: integer
+              description: Number of translations returned. Always `1`.
+              example: 1
+        contents:
+          type: object
+          required:
+            - translated
+            - text
+            - translation
+          properties:
+            translated:
+              type: string
+              description: The translated output text.
+              example: "Most afraid of the dark, I am, hmm."
+            text:
+              type: string
+              description: The original (trimmed) input text.
+              example: "I am very afraid of the dark."
+            translation:
+              type: string
+              enum:
+                - yoda
+                - shakespeare
+              description: The translation mode applied.
+              example: yoda
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: integer
+              description: HTTP status code mirrored in the body.
+              example: 400
+            message:
+              type: string
+              description: Human-readable description of the error.
+              example: "Missing or empty \"text\" field in request body."
+
+    RateLimitErrorResponse:
+      type: object
+      required:
+        - error
+        - retry_after
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: integer
+              description: HTTP status code mirrored in the body. Always `429`.
+              example: 429
+            message:
+              type: string
+              description: Human-readable description of the rate limit error.
+              example: "Too many requests. You have exceeded the rate limit of 15 calls per hour."
+        retry_after:
+          type: integer
+          description: |
+            Seconds remaining until the rate-limit window resets. No `Retry-After`
+            HTTP header is set — this field is the only place the delay is communicated.
+          example: 3542

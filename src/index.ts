@@ -13,10 +13,10 @@ export interface Env {
 // SQLite (Cloudflare's DO storage). Strongly consistent across all edge
 // locations — no per-isolate drift.
 //
-// Limit: 5 requests per hour, matching the FunTranslations free-tier.
+// Limit: 15 requests per hour.
 // ---------------------------------------------------------------------------
 
-const RATE_LIMIT = 5;
+const RATE_LIMIT = 15;
 const RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 export class RateLimiter implements DurableObject {
@@ -614,7 +614,7 @@ export default {
         {
           error: {
             code: 429,
-            message: "Too many requests. You have exceeded the rate limit of 5 calls per hour.",
+            message: "Too many requests. You have exceeded the rate limit of 15 calls per hour.",
           },
           retry_after: rateResult.retryAfter,
         },
