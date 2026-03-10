@@ -19,6 +19,8 @@ info:
 servers:
   - url: https://api.funtranslations.mercxry.me/v1
     description: Production
+  - url: http://localhost:8787/v1
+    description: Local dev
 
 paths:
   /translate/yoda:
@@ -35,6 +37,16 @@ paths:
         required: true
         content:
           application/json:
+            schema:
+              $ref: '#/components/schemas/TranslationRequest'
+            example:
+              text: "I am very afraid of the dark."
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TranslationRequest'
+            example:
+              text: "I am very afraid of the dark."
+          multipart/form-data:
             schema:
               $ref: '#/components/schemas/TranslationRequest'
             example:
@@ -112,6 +124,16 @@ paths:
         required: true
         content:
           application/json:
+            schema:
+              $ref: '#/components/schemas/TranslationRequest'
+            example:
+              text: "You have a great friend."
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TranslationRequest'
+            example:
+              text: "You have a great friend."
+          multipart/form-data:
             schema:
               $ref: '#/components/schemas/TranslationRequest'
             example:

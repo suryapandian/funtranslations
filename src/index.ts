@@ -601,7 +601,7 @@ export default {
       return errorResponse("Method not allowed. Use POST.", 405);
     }
 
-    const translationType = apiPath.replace("/translate/", "").toLowerCase();
+    const translationType = apiPath.replace("/translate/", "").toLowerCase().replace(/\.json$/, "");
     if (translationType !== "yoda" && translationType !== "shakespeare") {
       return errorResponse(
         `Unknown translation type "${translationType}". Use /translate/yoda or /translate/shakespeare.`,
@@ -633,15 +633,33 @@ export default {
       );
     }
 
-    // Parse request body
-    let body: { text?: unknown };
+    // Parse request body — supports JSON, form-urlencoded, and multipart/form-data
+    let text: unknown;
+    const contentType = request.headers.get("content-type") ?? "";
     try {
-      body = await request.json();
+      if (contentType.includes("application/json")) {
+        const body = await request.json<{ text?: unknown }>();
+        text = body?.text;
+      } else if (
+        contentType.includes("application/x-www-form-urlencoded") ||
+        contentType.includes("multipart/form-data")
+      ) {
+        const formData = await request.formData();
+        text = formData.get("text");
+      } else {
+        // Default: attempt JSON, fall back to form data
+        const raw = await request.text();
+        try {
+          const body = JSON.parse(raw) as { text?: unknown };
+          text = body?.text;
+        } catch {
+          const params = new URLSearchParams(raw);
+          text = params.get("text");
+        }
+      }
     } catch {
-      return errorResponse("Invalid JSON body.", 400);
+      return errorResponse("Could not parse request body.", 400);
     }
-
-    const text = body?.text;
     if (typeof text !== "string" || text.trim().length === 0) {
       return errorResponse('Missing or empty "text" field in request body.', 400);
     }

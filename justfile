@@ -13,12 +13,11 @@ dev-worker:
 
 # Serve the OpenAPI UI locally at http://localhost:3000
 dev-docs:
-    pnpm dlx serve public --listen 3000
+    pnpm dlx serve public --listen 3000 & open "http://localhost:3000"
 
 # Run Worker and OpenAPI UI concurrently (requires a shell with & support)
-dev:
+dev: dev-docs dev-worker
     @echo "Starting worker on http://localhost:8787 and docs on http://localhost:3000"
-    pnpm exec wrangler dev & pnpm dlx serve public --listen 3000
 
 # ── Deploy ────────────────────────────────────────────────────────────────────
 
