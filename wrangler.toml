@@ -1,6 +1,8 @@
 name = "funtranslation"
 main = "src/index.ts"
 compatibility_date = "2025-03-04"
+[observability]
+enabled = true
 
 routes = [
   { pattern = "api.funtranslations.mercxry.me/v1/*", zone_name = "mercxry.me" }

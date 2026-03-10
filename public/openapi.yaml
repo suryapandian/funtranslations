@@ -8,7 +8,7 @@ info:
 
     ## Rate Limiting
 
-    Each client is limited to **15 requests per hour**.
+    Each client is limited to **5 requests per minute**.
 
     When the limit is exceeded, the API returns HTTP `429` with a JSON body containing a
     `retry_after` field indicating how many seconds remain until the window resets.
@@ -96,8 +96,8 @@ paths:
                   message: "Method not allowed. Use POST."
         '429':
           description: |
-            Rate limit exceeded — the client has made more than 15 requests within
-            the current 1-hour window. Retry after the number of seconds indicated
+            Rate limit exceeded — the client has made more than 5 requests within
+            the current 1-minute window. Retry after the number of seconds indicated
             by `retry_after`.
           content:
             application/json:
@@ -106,8 +106,8 @@ paths:
               example:
                 error:
                   code: 429
-                  message: "Too many requests. You have exceeded the rate limit of 15 calls per hour."
-                retry_after: 3542
+                  message: "Too many requests. You have exceeded the rate limit of 5 calls per minute."
+                retry_after: 42
 
   /translate/shakespeare:
     post:
@@ -183,8 +183,8 @@ paths:
                   message: "Method not allowed. Use POST."
         '429':
           description: |
-            Rate limit exceeded — the client has made more than 15 requests within
-            the current 1-hour window. Retry after the number of seconds indicated
+            Rate limit exceeded — the client has made more than 5 requests within
+            the current 1-minute window. Retry after the number of seconds indicated
             by `retry_after`.
           content:
             application/json:
@@ -193,8 +193,8 @@ paths:
               example:
                 error:
                   code: 429
-                  message: "Too many requests. You have exceeded the rate limit of 15 calls per hour."
-                retry_after: 3542
+                  message: "Too many requests. You have exceeded the rate limit of 5 calls per minute."
+                retry_after: 42
 
 components:
   schemas:
@@ -286,7 +286,7 @@ components:
             message:
               type: string
               description: Human-readable description of the rate limit error.
-              example: "Too many requests. You have exceeded the rate limit of 15 calls per hour."
+              example: "Too many requests. You have exceeded the rate limit of 5 calls per minute."
         retry_after:
           type: integer
           description: |

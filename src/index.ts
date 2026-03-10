@@ -13,11 +13,11 @@ export interface Env {
 // SQLite (Cloudflare's DO storage). Strongly consistent across all edge
 // locations — no per-isolate drift.
 //
-// Limit: 15 requests per hour.
+// Limit: 5 requests per minute.
 // ---------------------------------------------------------------------------
 
-const RATE_LIMIT = 15;
-const RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 60 * 1000; // 1 minute
 
 export class RateLimiter implements DurableObject {
   private storage: DurableObjectStorage;
@@ -621,11 +621,12 @@ export default {
     const rateResult = await rateResponse.json<{ allowed: boolean; retryAfter?: number }>();
 
     if (!rateResult.allowed) {
+      console.log(JSON.stringify({ level: "warn", event: "rate_limit", ip, retry_after: rateResult.retryAfter }));
       return jsonResponse(
         {
           error: {
             code: 429,
-            message: "Too many requests. You have exceeded the rate limit of 15 calls per hour.",
+            message: "Too many requests. You have exceeded the rate limit of 5 calls per minute.",
           },
           retry_after: rateResult.retryAfter,
         },

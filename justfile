@@ -19,6 +19,10 @@ dev-docs:
 dev: dev-docs dev-worker
     @echo "Starting worker on http://localhost:8787 and docs on http://localhost:3000"
 
+# Stream live logs from the deployed Worker (pretty-printed JSON)
+tail:
+    pnpm exec wrangler tail --format json | pnpm dlx pino-pretty
+
 # ── Deploy ────────────────────────────────────────────────────────────────────
 
 # Deploy the Worker to Cloudflare
